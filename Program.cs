@@ -13,9 +13,71 @@ internal static class Program
 {
     public static void Main()
     {
-        HotKeyService.Shared.RegisterHotKey(0x31, HOT_KEY_MODIFIERS.MOD_ALT, () => FocusWindow("chrome.exe"));
-        HotKeyService.Shared.RegisterHotKey(0x32, HOT_KEY_MODIFIERS.MOD_ALT, () => FocusWindow("rider64.exe"));
-        HotKeyService.Shared.RegisterHotKey(0x33, HOT_KEY_MODIFIERS.MOD_ALT, () => FocusWindow("WindowsTerminal.exe"));
+        var configFilePath = Path.Combine(AppContext.BaseDirectory, "WindowManager.config");
+
+        const string defaultConfig = """
+                                     //https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+                                     
+                                     Alt+0x31=chrome.exe
+                                     Alt+0x32=rider64.exe
+                                     Alt+0x33=WindowsTerminal.exe
+                                     """;
+
+        string? config;
+
+        if (File.Exists(configFilePath))
+        {
+            config = File.ReadAllText(configFilePath);
+        }
+        else
+        {
+            File.WriteAllText(configFilePath, defaultConfig);
+            config = defaultConfig;
+        }
+
+        foreach (var configEntry in config.Split('\n')
+                     .Where(x => !x.StartsWith("//") && !string.IsNullOrEmpty(x))
+                     .Select(x => x.Trim().Split('='))
+                     .Where(x => x.Length == 2)
+                     .Select(x => ParseHotKey(x[0], x[1])))
+        {
+            if (configEntry != null)
+            {
+                HotKeyService.Shared.RegisterHotKey(configEntry);
+            }
+        }
+    }
+
+    private static HotKey? ParseHotKey(string keyCombo, string program)
+    {
+        var split = keyCombo.Split('+');
+
+        if (split.Length < 2)
+            return null;
+
+        var keyString = split.Last();
+        uint key;
+
+        try
+        {
+            key = (uint)Convert.ToInt32(keyString, 16);
+        }
+        catch
+        {
+            return null;
+        }
+
+        var modifiers = split.Take(split.Length - 1).Select(x => x switch
+        {
+            "Alt" => HOT_KEY_MODIFIERS.MOD_ALT,
+            "Ctrl" or "Control" => HOT_KEY_MODIFIERS.MOD_CONTROL,
+            "Shift" => HOT_KEY_MODIFIERS.MOD_SHIFT,
+            "Win" or "Windows" => HOT_KEY_MODIFIERS.MOD_WIN,
+            _ => (HOT_KEY_MODIFIERS)0 //zero value will just be ignored in bitwise or
+        })
+        .Aggregate((HOT_KEY_MODIFIERS)0, (current, accumulator) => current | accumulator);
+
+        return new HotKey(key, modifiers, () => FocusWindow(program));
     }
 
     private static void FocusWindow(string programName)

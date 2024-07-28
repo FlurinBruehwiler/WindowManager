@@ -26,8 +26,13 @@ internal class HotKeyService : IDisposable
 
     public int RegisterHotKey(uint key, HOT_KEY_MODIFIERS modifiers, Action callback)
     {
+        return RegisterHotKey(new HotKey(key, modifiers, callback));
+    }
+
+    public int RegisterHotKey(HotKey hotKey)
+    {
         var id = GetUniqueHotKeyId();
-        _hotKeysToRegister.Add(id, new HotKey(key, modifiers, callback));
+        _hotKeysToRegister.Add(id, hotKey);
         return id;
     }
 
